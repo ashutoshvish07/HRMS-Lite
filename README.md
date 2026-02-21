@@ -8,9 +8,9 @@ A lightweight, production-ready HR Management System built with **React + FastAP
 
 | Service | URL |
 |---|---|
-| Frontend | _Deploy to Vercel/Netlify and add here_ |
-| Backend API | _Deploy to Render/Railway and add here_ |
-| API Docs (Swagger) | `<backend-url>/docs` |
+| Frontend | [_Deploy to Vercel/Netlify and add here_](https://hrms-lite-cyan-omega.vercel.app/) |
+| Backend API | [_Deploy to Render/Railway and add here_](https://hrms-lite-1-1b6v.onrender.com/docs) |
+| API Docs (Swagger) | `[<backend-url>/docs](https://hrms-lite-1-1b6v.onrender.com/)` |
 
 ---
 
