@@ -8,9 +8,9 @@ A lightweight, production-ready HR Management System built with **React + FastAP
 
 | Service | URL |
 |---|---|
-| Frontend | _Deploy to Vercel/Netlify and add here_ |
-| Backend API | _Deploy to Render/Railway and add here_ |
-| API Docs (Swagger) | `<backend-url>/docs` |
+| Frontend | [_Deploy to Vercel here_](https://hrms-lite-cyan-omega.vercel.app/) |
+| Backend API | [_Deploy to Render here_](https://hrms-lite-1-1b6v.onrender.com/docs) |
+| API Docs (Swagger) | `[<backend-url>/docs](https://hrms-lite-1-1b6v.onrender.com/)` |
 
 ---
 
@@ -21,8 +21,8 @@ A lightweight, production-ready HR Management System built with **React + FastAP
 | Frontend | React 18, React Router v6, Tailwind CSS, Axios, react-hot-toast |
 | Backend | Python 3.11, FastAPI, Motor (async MongoDB driver) |
 | Database | MongoDB (Atlas) |
-| Frontend Deploy | Vercel / Netlify |
-| Backend Deploy | Render / Railway |
+| Frontend Deploy | Vercel |
+| Backend Deploy | Render  |
 
 ---
 
@@ -149,29 +149,6 @@ npm run dev
 Frontend will be live at: http://localhost:3000
 
 ---
-
-## 🌐 Deployment
-
-### Backend → Render
-
-1. Push code to GitHub
-2. Create new **Web Service** on [render.com](https://render.com)
-3. Set:
-   - **Build command:** `pip install -r requirements.txt`
-   - **Start command:** `uvicorn main:app --host 0.0.0.0 --port $PORT`
-4. Add environment variables: `MONGODB_URL`, `DATABASE_NAME`
-5. Deploy → copy the live URL
-
-### Frontend → Vercel
-
-1. Push code to GitHub
-2. Import repo on [vercel.com](https://vercel.com)
-3. Set root to `frontend/`
-4. Add environment variable: `VITE_API_URL=<your-render-backend-url>`
-5. Deploy → copy live URL
-
----
-
 ## 🔌 API Endpoints
 
 ### Employees
