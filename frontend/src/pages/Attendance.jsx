@@ -1,17 +1,19 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { attendanceAPI, employeeAPI } from '../api';
+import { useAttendance } from '../context/AttendanceContext';
+import { useEmployees } from '../context/EmployeeContext';
+import { useDashboard } from '../context/DashboardContext';
 import { LoadingState, ErrorState, EmptyState, StatusBadge } from '../components/ui';
 import MarkAttendanceModal from '../components/MarkAttendanceModal';
-import { format } from 'date-fns';
 
 export default function Attendance() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
+  const { fetchAttendance, getCached, markAttendance, loading, error } = useAttendance();
+  const { employees, fetchEmployees } = useEmployees();
+  const { invalidate: invalidateDashboard } = useDashboard();
+
   const [records, setRecords] = useState([]);
-  const [employees, setEmployees] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [showMark, setShowMark] = useState(false);
 
   // Filters
@@ -19,58 +21,60 @@ export default function Attendance() {
   const [filterDate, setFilterDate] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
 
+  // ✅ Only fetches employees if not already cached
   useEffect(() => {
-    employeeAPI.getAll().then(setEmployees).catch(() => {});
+    fetchEmployees();
   }, []);
 
-  const fetchAttendance = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      let data;
-      const params = {};
-      if (filterDate) params.date = filterDate;
-      if (filterStatus) params.status = filterStatus;
+  // ✅ Fetch attendance only when filters change — uses cache when available
+  const loadAttendance = useCallback(async (force = false) => {
+    const params = {};
+    if (filterDate) params.date = filterDate;
+    if (filterStatus) params.status = filterStatus;
 
-      if (filterEmployee) {
-        data = await attendanceAPI.getByEmployee(filterEmployee, params);
-      } else {
-        data = await attendanceAPI.getAll(params);
+    // Check cache first
+    if (!force) {
+      const cached = getCached(filterEmployee, params);
+      if (cached) {
+        setRecords(cached);
+        return;
       }
-      setRecords(data);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
     }
-  }, [filterEmployee, filterDate, filterStatus]);
+
+    try {
+      const data = await fetchAttendance(filterEmployee, params, force);
+      if (data) setRecords(data);
+    } catch (err) {
+      toast.error(err.message);
+    }
+  }, [filterEmployee, filterDate, filterStatus, fetchAttendance, getCached]);
 
   useEffect(() => {
-    fetchAttendance();
-  }, [fetchAttendance]);
+    loadAttendance();
+  }, [filterEmployee, filterDate, filterStatus]);
 
   const handleMark = async (form) => {
-    const record = await attendanceAPI.mark(form);
+    await markAttendance(form);
+    invalidateDashboard();
     toast.success('Attendance marked successfully!');
-    fetchAttendance();
+    // Force refresh current view after marking
+    loadAttendance(true);
   };
 
   const clearFilters = () => {
     setFilterEmployee('');
     setFilterDate('');
     setFilterStatus('');
-    setSearchParams({});
   };
 
   const hasFilters = filterEmployee || filterDate || filterStatus;
 
-  // Group records by date for display
+  // Group by date for the "all employees" view
   const groupedByDate = records.reduce((acc, rec) => {
     acc[rec.date] = acc[rec.date] || [];
     acc[rec.date].push(rec);
     return acc;
   }, {});
-
   const sortedDates = Object.keys(groupedByDate).sort((a, b) => b.localeCompare(a));
 
   return (
@@ -133,14 +137,21 @@ export default function Attendance() {
               Clear Filters
             </button>
           )}
+
+          <button
+            onClick={() => loadAttendance(true)}
+            className="btn-secondary py-2 text-sm h-[42px]"
+          >
+            ↻ Refresh
+          </button>
         </div>
       </div>
 
       {/* Content */}
-      {loading ? (
+      {loading && !records.length ? (
         <LoadingState message="Loading attendance records..." />
-      ) : error ? (
-        <ErrorState message={error} onRetry={fetchAttendance} />
+      ) : error && !records.length ? (
+        <ErrorState message={error} onRetry={() => loadAttendance(true)} />
       ) : records.length === 0 ? (
         <div className="card">
           <EmptyState
@@ -148,15 +159,13 @@ export default function Attendance() {
             title="No attendance records"
             description={
               hasFilters
-                ? 'No records match your current filters. Try clearing them.'
-                : 'Start marking attendance for your employees.'
+                ? 'No records match your filters. Try clearing them.'
+                : 'Start by marking attendance for your employees.'
             }
             action={
               <div className="flex gap-3">
                 {hasFilters && (
-                  <button onClick={clearFilters} className="btn-secondary">
-                    Clear Filters
-                  </button>
+                  <button onClick={clearFilters} className="btn-secondary">Clear Filters</button>
                 )}
                 <button onClick={() => setShowMark(true)} className="btn-primary">
                   + Mark Attendance
@@ -166,7 +175,7 @@ export default function Attendance() {
           />
         </div>
       ) : filterEmployee ? (
-        // Single employee: show flat table
+        // Single employee view — flat table
         <div className="card overflow-hidden">
           <div className="px-6 py-4 border-b border-surface-100 flex items-center gap-3">
             {(() => {
@@ -178,7 +187,7 @@ export default function Attendance() {
                   </div>
                   <div>
                     <p className="font-semibold text-surface-800 text-sm">{emp.full_name}</p>
-                    <p className="text-xs text-gray-400">{emp.department} • {records.length} records</p>
+                    <p className="text-xs text-gray-400">{emp.department} · {records.length} records</p>
                   </div>
                   <div className="ml-auto flex gap-3">
                     <span className="text-xs bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full font-medium">
@@ -207,16 +216,14 @@ export default function Attendance() {
                   <td className="px-6 py-3 text-sm text-gray-400">
                     {new Date(rec.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long' })}
                   </td>
-                  <td className="px-6 py-3">
-                    <StatusBadge status={rec.status} />
-                  </td>
+                  <td className="px-6 py-3"><StatusBadge status={rec.status} /></td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       ) : (
-        // All employees: group by date
+        // All employees — grouped by date
         <div className="space-y-4">
           {sortedDates.map((date) => (
             <div key={date} className="card overflow-hidden">
@@ -224,7 +231,9 @@ export default function Attendance() {
                 <div className="flex items-center gap-3">
                   <span className="font-display font-semibold text-surface-800 text-sm">{date}</span>
                   <span className="text-xs text-gray-400">
-                    {new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                    {new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
+                      weekday: 'long', month: 'long', day: 'numeric',
+                    })}
                   </span>
                 </div>
                 <div className="flex gap-2">

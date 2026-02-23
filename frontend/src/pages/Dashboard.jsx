@@ -1,48 +1,48 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { dashboardAPI, employeeAPI } from '../api';
+import { useDashboard } from '../context/DashboardContext';
+import { useEmployees } from '../context/EmployeeContext';
 import { StatCard, LoadingState, ErrorState } from '../components/ui';
 
 export default function Dashboard() {
-  const [summary, setSummary] = useState(null);
-  const [employees, setEmployees] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const { summary, loading: dashLoading, error: dashError, fetchSummary } = useDashboard();
+  const { employees, loading: empLoading, fetchEmployees } = useEmployees();
 
-  const fetchData = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [s, emps] = await Promise.all([
-        dashboardAPI.getSummary(),
-        employeeAPI.getAll(),
-      ]);
-      setSummary(s);
-      setEmployees(emps);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // ✅ Only fetches if not already cached — no duplicate calls on tab switch
+  useEffect(() => {
+    fetchSummary();
+    fetchEmployees();
+  }, []);
 
-  useEffect(() => { fetchData(); }, []);
+  const loading = (dashLoading && !summary) || (empLoading && !employees.length);
+  const error = dashError;
 
   if (loading) return <LoadingState message="Loading dashboard..." />;
-  if (error) return <ErrorState message={error} onRetry={fetchData} />;
+  if (error && !summary) return <ErrorState message={error} onRetry={() => fetchSummary(true)} />;
+  if (!summary) return <LoadingState message="Loading dashboard..." />;
 
-  const topEmployees = employees
+  const topEmployees = [...employees]
     .sort((a, b) => b.total_present - a.total_present)
     .slice(0, 5);
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div>
-        <h1 className="font-display text-3xl font-bold text-surface-900">Dashboard</h1>
-        <p className="text-sm text-gray-400 mt-1">
-          Overview for {new Date(summary.today).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="font-display text-3xl font-bold text-surface-900">Dashboard</h1>
+          <p className="text-sm text-gray-400 mt-1">
+            Overview for{' '}
+            {new Date(summary.today + 'T00:00:00').toLocaleDateString('en-US', {
+              weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+            })}
+          </p>
+        </div>
+        <button
+          onClick={() => { fetchSummary(true); fetchEmployees(true); }}
+          className="btn-secondary text-xs py-2 px-3"
+        >
+          ↻ Refresh
+        </button>
       </div>
 
       {/* Stats */}
@@ -62,18 +62,16 @@ export default function Dashboard() {
           ) : (
             <div className="space-y-3">
               {summary.departments.map((d) => (
-                <div key={d.department} className="flex items-center gap-3">
-                  <div className="flex-1">
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="font-medium text-surface-800">{d.department}</span>
-                      <span className="text-gray-400">{d.count} emp</span>
-                    </div>
-                    <div className="h-2 bg-surface-100 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-brand-500 rounded-full transition-all duration-500"
-                        style={{ width: `${(d.count / summary.total_employees) * 100}%` }}
-                      />
-                    </div>
+                <div key={d.department}>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="font-medium text-surface-800">{d.department}</span>
+                    <span className="text-gray-400">{d.count} emp</span>
+                  </div>
+                  <div className="h-2 bg-surface-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-brand-500 rounded-full transition-all duration-500"
+                      style={{ width: `${(d.count / summary.total_employees) * 100}%` }}
+                    />
                   </div>
                 </div>
               ))}
@@ -109,18 +107,14 @@ export default function Dashboard() {
       {/* Quick Links */}
       <div className="grid grid-cols-2 gap-4">
         <Link to="/employees" className="card p-5 flex items-center gap-4 hover:border-brand-500/30 hover:shadow-md transition-all duration-200 group cursor-pointer">
-          <div className="w-10 h-10 rounded-xl bg-brand-50 text-brand-500 flex items-center justify-center text-xl group-hover:bg-brand-500 group-hover:text-white transition-all duration-200">
-            👥
-          </div>
+          <div className="w-10 h-10 rounded-xl bg-brand-50 text-brand-500 flex items-center justify-center text-xl group-hover:bg-brand-500 group-hover:text-white transition-all duration-200">👥</div>
           <div>
             <p className="font-semibold text-surface-800 text-sm">Manage Employees</p>
             <p className="text-xs text-gray-400">Add, view, or delete records</p>
           </div>
         </Link>
         <Link to="/attendance" className="card p-5 flex items-center gap-4 hover:border-brand-500/30 hover:shadow-md transition-all duration-200 group cursor-pointer">
-          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl group-hover:bg-emerald-500 group-hover:text-white transition-all duration-200">
-            📋
-          </div>
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl group-hover:bg-emerald-500 group-hover:text-white transition-all duration-200">📋</div>
           <div>
             <p className="font-semibold text-surface-800 text-sm">Track Attendance</p>
             <p className="text-xs text-gray-400">Mark and view attendance</p>

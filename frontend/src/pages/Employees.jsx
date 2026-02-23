@@ -1,47 +1,41 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { employeeAPI } from '../api';
+import { useEmployees } from '../context/EmployeeContext';
+import { useDashboard } from '../context/DashboardContext';
 import { LoadingState, ErrorState, EmptyState, ConfirmDialog } from '../components/ui';
 import AddEmployeeModal from '../components/AddEmployeeModal';
 import { Link } from 'react-router-dom';
 
 export default function Employees() {
-  const [employees, setEmployees] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const {
+    employees, loading, error,
+    fetchEmployees, addEmployee, deleteEmployee,
+  } = useEmployees();
+  const { invalidate: invalidateDashboard } = useDashboard();
+
   const [showAdd, setShowAdd] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [search, setSearch] = useState('');
 
-  const fetchEmployees = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await employeeAPI.getAll();
-      setEmployees(data);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { fetchEmployees(); }, []);
+  // ✅ Only fetches if not already in cache
+  useEffect(() => {
+    fetchEmployees();
+  }, []);
 
   const handleCreate = async (form) => {
-    const emp = await employeeAPI.create(form);
-    setEmployees((prev) => [emp, ...prev]);
-    toast.success(`Employee ${emp.full_name} added successfully!`);
+    const emp = await addEmployee(form);
+    invalidateDashboard(); // refresh dashboard counts next visit
+    toast.success(`${emp.full_name} added successfully!`);
   };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      await employeeAPI.delete(deleteTarget.employee_id);
-      setEmployees((prev) => prev.filter((e) => e.employee_id !== deleteTarget.employee_id));
-      toast.success(`Employee ${deleteTarget.full_name} deleted`);
+      await deleteEmployee(deleteTarget.employee_id);
+      invalidateDashboard();
+      toast.success(`${deleteTarget.full_name} deleted`);
       setDeleteTarget(null);
     } catch (err) {
       toast.error(err.message);
@@ -82,10 +76,10 @@ export default function Employees() {
       </div>
 
       {/* Content */}
-      {loading ? (
+      {loading && !employees.length ? (
         <LoadingState message="Loading employees..." />
-      ) : error ? (
-        <ErrorState message={error} onRetry={fetchEmployees} />
+      ) : error && !employees.length ? (
+        <ErrorState message={error} onRetry={() => fetchEmployees(true)} />
       ) : filtered.length === 0 ? (
         search ? (
           <div className="card py-16 text-center">
@@ -98,7 +92,7 @@ export default function Employees() {
             <EmptyState
               icon="👥"
               title="No employees yet"
-              description="Add your first employee to get started with the HR management system."
+              description="Add your first employee to get started."
               action={
                 <button onClick={() => setShowAdd(true)} className="btn-primary">
                   + Add First Employee
@@ -140,7 +134,7 @@ export default function Employees() {
                     </code>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="text-sm text-surface-800 bg-brand-50 text-brand-600 px-3 py-1 rounded-full text-xs font-medium">
+                    <span className="text-brand-600 bg-brand-50 px-3 py-1 rounded-full text-xs font-medium">
                       {emp.department}
                     </span>
                   </td>
@@ -182,7 +176,6 @@ export default function Employees() {
         </div>
       )}
 
-      {/* Modals */}
       <AddEmployeeModal
         isOpen={showAdd}
         onClose={() => setShowAdd(false)}
@@ -194,7 +187,7 @@ export default function Employees() {
         onConfirm={handleDelete}
         loading={deleting}
         title="Delete Employee"
-        message={`Are you sure you want to delete ${deleteTarget?.full_name}? This will also remove all their attendance records. This action cannot be undone.`}
+        message={`Are you sure you want to delete ${deleteTarget?.full_name}? All their attendance records will also be removed. This cannot be undone.`}
       />
     </div>
   );
